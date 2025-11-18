@@ -1,11 +1,11 @@
-# UAC Forecast Downloader (Dark Mode)
 
-This is the fully packaged version including HTML, styling, fetch logic,
-and Excel export.
+# UAC Forecast Downloader (Dark Mode) with CORS Proxy
 
-Follow the same GitHub Pages instructions:
+This version uses a public CORS proxy to allow API requests to work on GitHub Pages.
 
-1.  Create repo: **uac-tool**
-2.  Upload these files
-3.  Enable GitHub Pages
-4.  Visit: https://mrk-iii.github.io/uac-tool
+## Deployment
+
+1. Go to your `uac-tool` repository.
+2. Upload these files (overwrite existing ones).
+3. GitHub Pages will automatically deploy.
+4. Visit: https://mrk-iii.github.io/uac-tool

@@ -162,7 +162,7 @@ async function startDownload() {
   log("Fetching forecasts…");
 
   try {
-    const url = `https://utahavalanchecenter.org/forecast/${selectedRegion}/json`;
+    const url = `https://cors.isomorphic-git.org/https://utahavalanchecenter.org/forecast/${selectedRegion}/json`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("HTTP " + res.status);
 
