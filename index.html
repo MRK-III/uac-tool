@@ -3,9 +3,223 @@
 <head>
 <meta charset="UTF-8" />
 <title>UAC Forecast Downloader – Dark Mode</title>
-<!-- content omitted for brevity; actual long HTML was in canvas -->
+<style>
+  :root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --text: #eaeaea;
+    --accent: #4caf50;
+    --accent-hover: #43a047;
+    --danger: #d32f2f;
+    --border: #333;
+    --button-bg: #2a2a2a;
+    --button-hover: #3a3a2a;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, sans-serif;
+    padding: 20px;
+  }
+  h1 { color: var(--text); }
+
+  .card {
+    background: var(--card);
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    max-width: 900px;
+  }
+
+  button {
+    padding: 10px 14px;
+    margin: 4px;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--text);
+    background: var(--button-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: 0.2s;
+  }
+  button:hover {
+    background: var(--button-hover);
+  }
+  .selected {
+    background: var(--accent) !important;
+    color: white !important;
+    border-color: var(--accent-hover);
+  }
+  #downloadBtn {
+    padding: 12px 22px;
+    font-size: 16px;
+    margin-top: 14px;
+    border-radius: 6px;
+  }
+  #downloadBtn.enabled {
+    background: var(--accent);
+    border-color: var(--accent-hover);
+  }
+  #downloadBtn.enabled:hover {
+    background: var(--accent-hover);
+  }
+
+  #spinner {
+    display: none;
+    margin-top: 12px;
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  #log {
+    white-space: pre-wrap;
+    margin-top: 20px;
+    padding: 12px;
+    background: #0f0f0f;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    max-height: 250px;
+    overflow-y: auto;
+    font-size: 14px;
+  }
+
+  input[type="date"] {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 6px;
+    color: var(--text);
+    border-radius: 4px;
+  }
+</style>
 </head>
 <body>
-<!-- Please paste the full HTML from the canvas into your GitHub repo -->
+
+<h1>UAC Avalanche Forecast Downloader (Dark Mode)</h1>
+<div class="card">
+<p>Select a region, optionally choose a date range, then download forecasts as an Excel file.</p>
+
+<div id="regionButtons"></div>
+
+<div style="margin: 14px 0;">
+  <label>Start Date: <input type="date" id="startDate"></label>
+  <label style="margin-left: 12px;">End Date: <input type="date" id="endDate"></label>
+</div>
+
+<button id="downloadBtn" disabled>Download Forecast Excel</button>
+<div id="spinner">Loading… please wait.</div>
+<div id="log"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const REGIONS = [
+  ['salt-lake','Salt Lake'], ['logan','Logan'], ['ogden','Ogden'], ['provo','Provo'],
+  ['uintas','Uintas'], ['skyline','Skyline'], ['manti','Manti Skyline'],
+  ['moab','Moab / La Sals'], ['abajos','Abajos']
+];
+
+let selectedRegion = null;
+const regionContainer = document.getElementById('regionButtons');
+REGIONS.forEach(([code, label]) => {
+  let btn = document.createElement('button');
+  btn.textContent = label;
+  btn.onclick = () => selectRegion(code, btn);
+  regionContainer.appendChild(btn);
+});
+
+const downloadBtn = document.getElementById('downloadBtn');
+const spinner = document.getElementById('spinner');
+
+function log(msg) {
+  document.getElementById("log").textContent += msg + "\n";
+}
+
+function selectRegion(region, btn) {
+  selectedRegion = region;
+  log("Selected region: " + region);
+
+  [...regionContainer.children].forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  downloadBtn.disabled = false;
+  downloadBtn.classList.add('enabled');
+}
+
+function dangerFromRose(rose) {
+  if (!Array.isArray(rose) || rose.length === 0) return "";
+  const maxVal = Math.max(...rose);
+  const map = {0:"",1:"Low",2:"Low",3:"Moderate",4:"Moderate",5:"Considerable",6:"Considerable",7:"High",8:"High",9:"Extreme",10:"Extreme"};
+  return map[maxVal] || "";
+}
+
+downloadBtn.onclick = startDownload;
+
+async function startDownload() {
+  if (!selectedRegion) return;
+
+  document.getElementById('log').textContent = '';
+  spinner.style.display = 'block';
+  log("Fetching forecasts…");
+
+  try {
+    const url = `https://utahavalanchecenter.org/forecast/${selectedRegion}/json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+
+    const data = await res.json();
+    const history = data.history || [];
+
+    log("Forecast count: " + history.length);
+
+    const start = document.getElementById('startDate').value.replace(/-/g, "");
+    const end = document.getElementById('endDate').value.replace(/-/g, "");
+
+    function inRange(date) {
+      if (start && date < start) return false;
+      if (end && date > end) return false;
+      return true;
+    }
+
+    let rows = [];
+
+    for (const f of history) {
+      let date = (f.dateIssued || '').replace(/T.*$/, '').replace(/-/g, '');
+      if (!inRange(date)) continue;
+
+      let danger = dangerFromRose(f.danger_rose || []);
+      let problems = f.problems || [];
+
+      if (problems.length === 0) {
+        rows.push({Date: date, "Danger Rating": danger});
+        continue;
+      }
+
+      for (const p of problems) {
+        rows.push({
+          Date: date,
+          "Danger Rating": danger,
+          "Avalanche Problem Type": p.type || "",
+          Likelihood: p.likelihood || "",
+          Uncertainty: p.uncertainty || ""
+        });
+      }
+    }
+
+    log("Final rows: " + rows.length);
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Forecasts');
+    XLSX.writeFile(wb, `uac_${selectedRegion}_forecasts.xlsx`);
+
+    log("Download complete.");
+  } catch (err) {
+    log("ERROR: " + err.message);
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+</script>
+
 </body>
 </html>
